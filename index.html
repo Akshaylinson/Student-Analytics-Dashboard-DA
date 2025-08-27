@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Student Analytics Dashboard · Pro</title>
+  <meta name="description" content="A professional, single-file student analytics dashboard with filters, charts, table, exports, and URL state." />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <style>
+    /* -----------------------
+       Pro Dashboard – Styles
+       ----------------------- */
+    :root {
+      --bg: #0b0f17;         --card: #101828;         --txt: #e7eefc;
+      --muted: #9bb0d3;      --accent: #4ea1ff;      --soft: #131d33;
+      --chip: #223053;       --border: #1f2940;      --success: #42d392;
+      --danger: #ff6b6b;     --warn: #ffb020;
+    }
+    [data-theme="light"] {
+      --bg: #f6f8fc; --card:#ffffff; --txt:#0b1220; --muted:#5c6b87; --soft:#f1f4fa; --chip:#e9eef9; --border:#dfe6f5;
+    }
+    * { box-sizing: border-box }
+    html,body { height: 100% }
+    body {
+      margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--txt); background: var(--bg); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    .container { max-width: 1220px; margin: 0 auto; padding: 20px; }
+    header .topbar { display:flex; align-items:center; gap:12px; justify-content: space-between; }
+    h1 { margin: 8px 0 2px; letter-spacing:.2px; font-size: 24px; }
+    .sub { color: var(--muted); font-size: 12px }
+
+    .toolbar { display:flex; gap:8px; flex-wrap: wrap; align-items:center; }
+    .btn, select, input[type="text"], .chip {
+      background: var(--chip); color: var(--txt); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size:14px;
+    }
+    .btn { cursor: pointer; }
+    .btn.primary { background: linear-gradient(180deg, var(--accent), #357bce); color: white; border: none; }
+    .btn.ghost { background: transparent }
+    .btn:disabled { opacity:.6; cursor:not-allowed }
+    .icon { width: 16px; height:16px; vertical-align: -3px; margin-right:6px; }
+
+    .row { display:grid; grid-template-columns: 1fr; gap: 12px; }
+    .kpis { display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .kpi { background: linear-gradient(180deg, var(--card), var(--soft)); border:1px solid var(--border); border-radius:16px; padding:14px; }
+    .kpi .label { color: var(--muted); font-size:12px }
+    .kpi .value { font-size:28px; font-weight:700; color: var(--accent); margin-top:6px }
+
+    .card { background: linear-gradient(180deg, var(--card), var(--soft)); border:1px solid var(--border); border-radius:16px; padding:16px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+    .card h3 { margin: 0 0 10px; font-size:16px }
+
+    .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+    .filters { display:flex; gap:10px; flex-wrap: wrap; align-items: center; }
+    .filters .field { display:flex; gap:6px; align-items:center }
+    .filters .spacer { flex:1 }
+
+    .table-wrap { overflow-x:auto }
+    table { width:100% }
+
+    .status { display:flex; gap:8px; align-items:center; color: var(--muted); font-size:12px }
+    .dot { width:8px; height:8px; border-radius:50%; background: var(--muted) }
+
+    .toast { position: fixed; right: 18px; bottom: 18px; background: var(--card); border:1px solid var(--border); padding:12px 14px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25); display:none }
+
+    dialog { border: 1px solid var(--border); background: var(--card); color: var(--txt); border-radius: 16px; padding: 0; width: min(720px, 92vw); }
+    dialog::backdrop { background: rgba(0,0,0,.45) }
+    .dlg-head { padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between }
+    .dlg-body { padding:16px }
+    .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 12px }
+
+    .muted { color: var(--muted) }
+
+    @media (max-width: 900px) {
+      .kpis { grid-template-columns: repeat(2, 1fr) }
+      .grid { grid-template-columns: 1fr }
+      header .topbar { flex-direction: column; align-items:flex-start }
+    }
+  </style>
+
+  <!-- Vendors -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/v/bs5/dt-2.0.7/datatables.min.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.datatables.net/v/bs5/dt-2.0.7/datatables.min.js"></script>
+</head>
+<body>
+  <header class="container">
+    <div class="topbar">
+      <div>
+        <h1>Student Analytics Dashboard</h1>
+        <div class="sub">Single-file · Charts, Table, Filters, CSV/XLSX import, Export, URL state, Dark/Light</div>
+      </div>
+      <div class="toolbar">
+        <label class="btn">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 16l-4-4m4 4l4-4m-4 4V3" stroke-width="1.5"/><path d="M20 17v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2" stroke-width="1.5"/></svg>
+          Load file
+          <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" hidden>
+        </label>
+        <button id="mapBtn" class="btn ghost">Map columns</button>
+        <button id="exportBtn" class="btn">Export filtered CSV</button>
+        <button id="resetBtn" class="btn ghost">Reset</button>
+        <button id="themeBtn" class="btn ghost" title="Toggle theme">🌙/☀️</button>
+      </div>
+    </div>
+
+    <div class="status" id="status">
+      <span class="dot" id="dot"></span>
+      <span id="statusText">No data loaded. Choose an .xlsx or .csv file.</span>
+    </div>
+  </header>
+
+  <main class="container row">
+    <!-- Filters Panel -->
+    <section class="card">
+      <div class="filters">
+        <div class="field"><span class="muted">State</span><select id="stateFilter"><option value="">All</option></select></div>
+        <div class="field"><span class="muted">Board</span><select id="boardFilter"><option value="">All</option></select></div>
+        <div class="field"><span class="muted">Gender</span><select id="genderFilter"><option value="">All</option><option value="M">Male</option><option value="F">Female</option></select></div>
+        <div class="field"><span class="muted">Category</span><select id="catFilter"><option value="">All</option></select></div>
+        <input id="searchBox" type="text" placeholder="Search name/city/district…" style="flex:1; min-width:220px">
+        <button id="clearFilters" class="btn ghost">Clear filters</button>
+      </div>
+    </section>
+
+    <!-- KPI Cards -->
+    <section class="kpis">
+      <div class="kpi"><div class="label">Total Students</div><div id="kpiTotal" class="value">–</div></div>
+      <div class="kpi"><div class="label">Female %</div><div id="kpiFemale" class="value">–</div></div>
+      <div class="kpi"><div class="label">States</div><div id="kpiStates" class="value">–</div></div>
+      <div class="kpi"><div class="label">Boards</div><div id="kpiBoards" class="value">–</div></div>
+    </section>
+
+    <!-- Charts -->
+    <section class="grid">
+      <div class="card"><h3>Gender</h3><canvas id="genderChart" height="140"></canvas></div>
+      <div class="card"><h3>Category</h3><canvas id="catChart" height="140"></canvas></div>
+      <div class="card"><h3>Top 10 States</h3><canvas id="stateChart" height="140"></canvas></div>
+      <div class="card"><h3>Top 10 Boards</h3><canvas id="boardChart" height="140"></canvas></div>
+      <div class="card"><h3>Age Distribution</h3><canvas id="ageChart" height="140"></canvas></div>
+    </section>
+
+    <!-- Data Table -->
+    <section class="card">
+      <div class="table-wrap">
+        <table id="studentTable" class="display compact" style="width:100%">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Gender</th>
+              <th>Category</th>
+              <th>Board</th>
+              <th>Medium</th>
+              <th>City</th>
+              <th>District</th>
+              <th>State</th>
+              <th>DOB</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="container muted" style="margin-bottom:40px">© You · Pro dashboard template. No backend. Works over a simple local server (e.g., VS Code Live Server).</footer>
+
+  <!-- Column Mapping Dialog -->
+  <dialog id="mapDialog">
+    <div class="dlg-head">
+      <strong>Map your column names</strong>
+      <button class="btn ghost" onclick="mapDialog.close()">✖</button>
+    </div>
+    <div class="dlg-body">
+      <p class="muted">Match the fields the dashboard expects to the actual headers in your sheet. Unmapped fields will be empty.</p>
+      <div class="grid-2">
+        <div>
+          <label class="muted">Name</label>
+          <select id="map_name"></select>
+        </div>
+        <div>
+          <label class="muted">Gender</label>
+          <select id="map_gender"></select>
+        </div>
+        <div>
+          <label class="muted">Category</label>
+          <select id="map_cat"></select>
+        </div>
+        <div>
+          <label class="muted">Board</label>
+          <select id="map_board"></select>
+        </div>
+        <div>
+          <label class="muted">Medium</label>
+          <select id="map_medium"></select>
+        </div>
+        <div>
+          <label class="muted">City</label>
+          <select id="map_city"></select>
+        </div>
+        <div>
+          <label class="muted">District</label>
+          <select id="map_district"></select>
+        </div>
+        <div>
+          <label class="muted">State</label>
+          <select id="map_state"></select>
+        </div>
+        <div>
+          <label class="muted">DOB</label>
+          <select id="map_dob"></select>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px">
+        <button class="btn ghost" onclick="mapDialog.close()">Cancel</button>
+        <button id="saveMapBtn" class="btn primary">Save mapping</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ==============================
+    //  Pro Dashboard – Functionality
+    // ==============================
+    const DEFAULT_FILE = "Student India 64913.xlsx"; // auto-load if served
+
+    // State
+    let RAW = [];       // full dataset after normalization
+    let FILTERED = [];  // filtered view
+    let DT = null;      // DataTable instance
+    const charts = {};  // Chart instances
+
+    // Column mapping (dashboard fields -> actual headers)
+    // We persist in localStorage & URL so it survives reload/share
+    let MAP = {
+      name: "name", gender: "gender", cat: "cat", board: "board",
+      medium: "medium", city: "city", district: "district", state: "state", dob: "dob"
+    };
+
+    // Utilities
+    const $ = (id) => document.getElementById(id);
+    const safe = (v) => (v === undefined || v === null ? "" : String(v).trim());
+
+    function showToast(msg, kind = "") {
+      const t = $("toast");
+      t.textContent = msg; t.style.display = "block";
+      if (kind === "success") t.style.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--success');
+      if (kind === "danger") t.style.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--danger');
+      setTimeout(() => t.style.display = "none", 2600);
+    }
+
+    function setStatus(text, ok=false) {
+      $("statusText").textContent = text;
+      $("dot").style.background = ok ? getComputedStyle(document.documentElement).getPropertyValue('--success') : getComputedStyle(document.documentElement).getPropertyValue('--muted');
+    }
+
+    // Theme toggle
+    (function initTheme(){
+      const key = 'dash-theme';
+      const saved = localStorage.getItem(key) || 'dark';
+      if (saved === 'light') document.documentElement.setAttribute('data-theme','light');
+      $("themeBtn").addEventListener('click', () => {
+        const light = document.documentElement.getAttribute('data-theme') === 'light';
+        document.documentElement.setAttribute('data-theme', light ? 'dark' : 'light');
+        localStorage.setItem(key, light ? 'dark' : 'light');
+      });
+    })();
+
+    // Age calculator (supports Excel serial dates and common strings)
+    function computeAge(dobStr) {
+      if (!dobStr && dobStr !== 0) return null;
+      let d = null;
+      if (typeof dobStr === 'number') {
+        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+        d = new Date(excelEpoch.getTime() + dobStr * 86400000);
+      } else {
+        const parts = safe(dobStr).replace(/[^0-9A-Za-z-/: ]/g, '').trim();
+        const try1 = Date.parse(parts);
+        if (!isNaN(try1)) d = new Date(try1);
+      }
+      if (!d || isNaN(d.getTime())) return null;
+      const diff = Date.now() - d.getTime();
+      const age = Math.floor(diff / (365.25 * 24 * 3600 * 1000));
+      return (age >= 0 && age <= 100) ? age : null;
+    }
+
+    function uniqueSorted(arr) { return [...new Set(arr.filter(Boolean).map(x => safe(x)))].sort((a,b)=>a.localeCompare(b)); }
+    function topNCounts(arr, n=10) {
+      const map = new Map(); arr.forEach(v => { const k = safe(v); if (!k) return; map.set(k, (map.get(k)||0)+1); });
+      return [...map.entries()].sort((a,b)=>b[1]-a[1]).slice(0,n);
+    }
+
+    function normalizeRow(r) {
+      return {
+        name: safe(r[MAP.name]), gender: safe(r[MAP.gender]), cat: safe(r[MAP.cat]), board: safe(r[MAP.board]),
+        medium: safe(r[MAP.medium]), city: safe(r[MAP.city]), district: safe(r[MAP.district]), state: safe(r[MAP.state]), dob: r[MAP.dob]
+      };
+    }
+
+    // URL state (filters + mapping)
+    function readURLState() {
+      const u = new URL(location.href);
+      const p = Object.fromEntries(u.searchParams.entries());
+      // filters
+      $("stateFilter").value = p.st || ""; $("boardFilter").value = p.bd || ""; $("genderFilter").value = p.gd || ""; $("catFilter").value = p.ct || ""; $("searchBox").value = p.q || "";
+      // mapping
+      try { const m = p.map && JSON.parse(decodeURIComponent(p.map)); if (m) MAP = { ...MAP, ...m }; } catch {}
+    }
+    function writeURLState() {
+      const u = new URL(location.href); const sp = u.searchParams; sp.set('st', $("stateFilter").value); sp.set('bd', $("boardFilter").value);
+      sp.set('gd', $("genderFilter").value); sp.set('ct', $("catFilter").value); sp.set('q', $("searchBox").value);
+      sp.set('map', encodeURIComponent(JSON.stringify(MAP)));
+      history.replaceState(null, '', u.toString());
+    }
+
+    // Filters
+    function populateFilters(data) {
+      const states = uniqueSorted(data.map(r => r.state));
+      const boards = uniqueSorted(data.map(r => r.board));
+      const cats = uniqueSorted(data.map(r => r.cat));
+      const fill = (sel, list) => { sel.length = 1; list.forEach(v => sel.add(new Option(v, v))); };
+      fill($("stateFilter"), states); fill($("boardFilter"), boards); fill($("catFilter"), cats);
+    }
+
+    function applyFilters() {
+      const state = $("stateFilter").value; const board = $("boardFilter").value; const gender = $("genderFilter").value; const cat = $("catFilter").value; const q = $("searchBox").value.toLowerCase();
+      FILTERED = RAW.filter(r => {
+        if (state && r.state !== state) return false;
+        if (board && r.board !== board) return false;
+        if (gender && r.gender !== gender) return false;
+        if (cat && r.cat !== cat) return false;
+        if (q) { const hay = `${r.name} ${r.city} ${r.district} ${r.state}`.toLowerCase(); if (!hay.includes(q)) return false; }
+        return true;
+      });
+      updateKPIs(FILTERED); updateCharts(FILTERED); updateTable(FILTERED); writeURLState();
+    }
+
+    function updateKPIs(data) {
+      const total = data.length; const females = data.filter(r => r.gender === 'F').length; const femalePct = total ? Math.round((females/total)*100) : 0;
+      const states = uniqueSorted(data.map(r => r.state)).length; const boards = uniqueSorted(data.map(r => r.board)).length;
+      $("kpiTotal").textContent = total.toLocaleString(); $("kpiFemale").textContent = femalePct + '%'; $("kpiStates").textContent = states; $("kpiBoards").textContent = boards;
+    }
+
+    function chartify(id, cfg) { if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); }
+
+    function updateCharts(data) {
+      const gCounts = topNCounts(data.map(r => r.gender), 5);
+      chartify('genderChart', { type:'pie', data:{ labels:gCounts.map(([k])=>k||'Unknown'), datasets:[{ data:gCounts.map(([,v])=>v) }] } });
+      const cCounts = topNCounts(data.map(r => r.cat), 10);
+      chartify('catChart', { type:'bar', data:{ labels:cCounts.map(([k])=>k||'Unknown'), datasets:[{ data:cCounts.map(([,v])=>v) }] }, options:{ plugins:{ legend:{ display:false } } } });
+      const sCounts = topNCounts(data.map(r => r.state), 10);
+      chartify('stateChart', { type:'bar', data:{ labels:sCounts.map(([k])=>k), datasets:[{ data:sCounts.map(([,v])=>v) }] }, options:{ plugins:{ legend:{ display:false } } } });
+      const bCounts = topNCounts(data.map(r => r.board), 10);
+      chartify('boardChart', { type:'bar', data:{ labels:bCounts.map(([k])=>k), datasets:[{ data:bCounts.map(([,v])=>v) }] }, options:{ plugins:{ legend:{ display:false } } } });
+      const ages = data.map(r => computeAge(r.dob)).filter(a => a !== null);
+      const buckets = new Array(11).fill(0); const labels = ['≤10','11–15','16–20','21–25','26–30','31–35','36–40','41–45','46–50','51–60','>60'];
+      ages.forEach(a=>{ let i=0; if (a<=10) i=0; else if(a<=15) i=1; else if(a<=20) i=2; else if(a<=25) i=3; else if(a<=30) i=4; else if(a<=35) i=5; else if(a<=40) i=6; else if(a<=45) i=7; else if(a<=50) i=8; else if(a<=60) i=9; else i=10; buckets[i]++; });
+      chartify('ageChart', { type:'bar', data:{ labels, datasets:[{ data:buckets }] }, options:{ plugins:{ legend:{ display:false } } } });
+    }
+
+    function updateTable(data) {
+      const rows = data.map(r => [r.name, r.gender, r.cat, r.board, r.medium, r.city, r.district, r.state, safe(r.dob)]);
+      if (!DT) {
+        DT = new DataTable('#studentTable', { data: rows, columns: [
+          { title:'Name' }, { title:'Gender' }, { title:'Category' }, { title:'Board' }, { title:'Medium' }, { title:'City' }, { title:'District' }, { title:'State' }, { title:'DOB' }
+        ], pageLength: 10, deferRender: true, responsive: true });
+      } else { DT.clear(); DT.rows.add(rows); DT.draw(false); }
+    }
+
+    // Column mapping UI
+    function fillMapDialog(headers) {
+      const ids = ['name','gender','cat','board','medium','city','district','state','dob'];
+      ids.forEach(id => {
+        const sel = $(`map_${id}`); sel.innerHTML = '';
+        const optNone = new Option('(none)', ''); sel.add(optNone);
+        headers.forEach(h => sel.add(new Option(h, h)));
+        sel.value = MAP[id] && headers.includes(MAP[id]) ? MAP[id] : '';
+      });
+    }
+
+    function saveMappingFromDialog() {
+      const ids = ['name','gender','cat','board','medium','city','district','state','dob'];
+      ids.forEach(id => { const v = $(`map_${id}`).value; if (v) MAP[id] = v; });
+      localStorage.setItem('dash-map', JSON.stringify(MAP)); writeURLState();
+      showToast('Mapping saved', 'success');
+    }
+
+    // File loading
+    async function autoLoad() {
+      try {
+        const res = await fetch(DEFAULT_FILE); if (!res.ok) throw new Error('not found');
+        const buf = await res.arrayBuffer(); const lower = DEFAULT_FILE.toLowerCase();
+        if (lower.endsWith('.csv')) { parseCSV(new TextDecoder().decode(new Uint8Array(buf))); }
+        else { parseXLSX(buf); }
+      } catch { /* ignore */ }
+    }
+
+    function parseXLSX(arrayBuffer) {
+      try {
+        const wb = XLSX.read(arrayBuffer, { type:'array' }); const sheet = wb.Sheets[wb.SheetNames[0]]; const rows = XLSX.utils.sheet_to_json(sheet, { raw:true });
+        onRawRows(rows);
+      } catch (e) { console.error(e); showToast('Failed to read Excel', 'danger'); setStatus('Failed to read Excel'); }
+    }
+    function parseCSV(text) {
+      try {
+        const parsed = Papa.parse(text, { header:true, dynamicTyping:true }); onRawRows(parsed.data);
+      } catch (e) { console.error(e); showToast('Failed to read CSV', 'danger'); setStatus('Failed to read CSV'); }
+    }
+
+    function onRawRows(rows) {
+      // Prepare mapping based on headers
+      const headers = Object.keys(rows[0] || {});
+      // Load saved mapping if present
+      try { const saved = JSON.parse(localStorage.getItem('dash-map') || '{}'); MAP = { ...MAP, ...saved }; } catch {}
+      // Auto-guess mapping by fuzzy matching
+      const guesses = {
+        name:['name','student name','full name'], gender:['gender','sex'], cat:['category','cat','caste'], board:['board','educationboard','education board'],
+        medium:['medium','language','study medium'], city:['city','town'], district:['district'], state:['state','province'], dob:['dob','date of birth','birthdate','birth date']
+      };
+      for (const key in guesses) {
+        if (!MAP[key] || !headers.includes(MAP[key])) {
+          const hit = headers.find(h => guesses[key].some(g => h.toLowerCase() === g));
+          if (hit) MAP[key] = hit;
+        }
+      }
+
+      fillMapDialog(headers);
+      RAW = rows.map(normalizeRow).filter(r => r.name);
+      setStatus(`Loaded ${RAW.length.toLocaleString()} rows`, true);
+      populateFilters(RAW); readURLState(); applyFilters();
+    }
+
+    function onFileInput(file) {
+      const reader = new FileReader(); const lower = file.name.toLowerCase();
+      if (lower.endsWith('.csv')) { reader.onload = e => parseCSV(e.target.result); reader.readAsText(file); }
+      else { reader.onload = e => parseXLSX(e.target.result); reader.readAsArrayBuffer(file); }
+    }
+
+    // Export filtered data as CSV
+    function exportCSV() {
+      const headers = ['Name','Gender','Category','Board','Medium','City','District','State','DOB'];
+      const rows = FILTERED.map(r => [r.name, r.gender, r.cat, r.board, r.medium, r.city, r.district, r.state, safe(r.dob)]);
+      const csv = [headers.join(','), ...rows.map(r => r.map(v => '"' + String(v).replace(/"/g,'""') + '"').join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'students_filtered.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    // Wire up events
+    window.addEventListener('DOMContentLoaded', () => {
+      // Attempt auto-load if file is served next to this html (via Live Server)
+      autoLoad();
+      $('fileInput').addEventListener('change', e => { const f = e.target.files?.[0]; if (f) onFileInput(f); });
+      ['stateFilter','boardFilter','genderFilter','catFilter','searchBox'].forEach(id => $(id).addEventListener('input', applyFilters));
+      $('clearFilters').addEventListener('click', () => { ['stateFilter','boardFilter','genderFilter','catFilter','searchBox'].forEach(id => $(id).value=''); applyFilters(); });
+      $('exportBtn').addEventListener('click', exportCSV);
+      $('resetBtn').addEventListener('click', () => { localStorage.removeItem('dash-map'); location.href = location.pathname; });
+      $('mapBtn').addEventListener('click', () => $('mapDialog').showModal());
+      $('saveMapBtn').addEventListener('click', () => { saveMappingFromDialog(); $('mapDialog').close(); RAW = RAW.map(r => r); applyFilters(); });
+    });
+  </script>
+</body>
+</html>
